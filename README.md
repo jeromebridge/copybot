@@ -25,6 +25,33 @@ This is execution software, not a source of profitable leaders. Copying a profit
 
 ## Start here
 
+### VS Code on Ubuntu with Docker
+
+Make sure Docker Engine is running and `docker info` succeeds as your current
+user. Install the **Dev Containers** extension in VS Code (the Docker extension
+is optional). Open this
+repository folder, then run **Dev Containers: Reopen in Container** from the
+Command Palette. Docker builds the development image with Python 3.11, Rust
+1.93.1, and the system build libraries. VS Code installs the Python development
+packages when the container opens. The source stays in your local checkout.
+Rust and pip downloads are cached in Docker volumes. VS Code uses `.venv` for
+Python and `hot/Cargo.toml` for Rust, with rustfmt and Clippy available.
+
+After changing the container configuration, run **Dev Containers: Rebuild
+Container** from the Command Palette.
+
+In the container terminal, verify the setup:
+
+```sh
+cargo test --locked --manifest-path hot/Cargo.toml --lib --bin copybot-hot --tests
+.venv/bin/python -m pytest deploy/ scripts/test_check_release.py -q -p no:cacheprovider
+python scripts/check_release.py
+.venv/bin/python scripts/build_docs.py --check
+```
+
+The development container does not start the bot or configure a wallet. For an
+operator installation, follow the [installation guide](docs/INSTALL.md).
+
 On a Linux host with Git, a current stable Rust toolchain, and Python 3.11 or newer:
 
 ```sh

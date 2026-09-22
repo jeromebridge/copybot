@@ -1,0 +1,29 @@
+{
+  "name": "Copybot development",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=copybot-cargo-cache,target=/home/vscode/.cargo/registry,type=volume",
+    "source=copybot-git-cache,target=/home/vscode/.cargo/git,type=volume",
+    "source=copybot-pip-cache,target=/home/vscode/.cache/pip,type=volume"
+  ],
+  "postCreateCommand": "python -m venv .venv && .venv/bin/python -m pip install -r requirements-dev.txt",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "rust-analyzer.linkedProjects": ["hot/Cargo.toml"]
+      },
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "ms-python.python",
+        "openai.chatgpt"
+      ]
+    }
+  }
+}
