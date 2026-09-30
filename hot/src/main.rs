@@ -32,6 +32,14 @@ struct PhysicalWallet {
 fn now_ms() -> u128 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis()
 }
+fn entry_cash_fits(live: bool, available: f64, cash: Option<f64>, cost: f64, age: Option<i64>) -> bool {
+    if live {
+        copybot_hot::budget::buy_fits_aged(available, cash, cost, age)
+    } else {
+        // Dry decisions use the virtual budget; there is no authenticated cash poll.
+        copybot_hot::budget::buy_fits(available, None, cost)
+    }
+}
 #[allow(clippy::too_many_arguments)]
 async fn resolve_pending(
     log: &Arc<std::sync::Mutex<copybot_hot::pending::PendingLog>>,
@@ -7794,7 +7802,8 @@ savings withdrawal — nothing was done automatically. Check the market by hand.
                                 ))
                                 .unwrap_or((None, None));
                             let cost = intent.usd as f64 / MICRO;
-                            if !copybot_hot::budget::buy_fits_aged(
+                            if !entry_cash_fits(
+                                live,
                                 available,
                                 free_cash,
                                 cost,
@@ -8497,6 +8506,20 @@ not release {unfilled} unfilled shares: {e:?} — this order stays under-copied"
 }
 #[cfg(test)]
 mod http_handler_tests {
+    #[test]
+    fn dry_cash_check_uses_virtual_budget_without_wallet_credentials() {
+        assert!(super::entry_cash_fits(false, 100.0, None, 5.0, None));
+        assert!(!super::entry_cash_fits(false, 4.0, None, 5.0, None));
+        assert!(!super::entry_cash_fits(false, 100.0, None, f64::NAN, None));
+    }
+
+    #[test]
+    fn live_cash_check_still_requires_fresh_sufficient_cash() {
+        assert!(!super::entry_cash_fits(true, 100.0, None, 5.0, None));
+        assert!(!super::entry_cash_fits(true, 100.0, Some(4.0), 5.0, Some(0)));
+        assert!(!super::entry_cash_fits(true, 100.0, Some(100.0), 5.0, Some(301)));
+        assert!(super::entry_cash_fits(true, 100.0, Some(100.0), 5.0, Some(0)));
+    }
     fn req_with(ct: &str, origin: Option<&str>) -> String {
         let mut r = String::from(
             "POST /api/arm HTTP/1.1\r\nHost: box.tailnet.ts.net\r\n",
