@@ -9,6 +9,10 @@ pub struct Root {
 }
 #[derive(Debug, Deserialize)]
 pub struct Bot {
+    #[serde(default)]
+    pub confirmed_poll_secs: Option<u64>,
+    #[serde(default)]
+    pub confirmed_ws: bool,
     #[serde(default = "dry")]
     pub mode: String,
     pub clob_host: String,

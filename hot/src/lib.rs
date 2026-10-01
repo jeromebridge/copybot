@@ -51,3 +51,5 @@ pub mod txpool;
 pub mod sweep;
 pub mod venue;
 pub mod wallets;
+pub mod confirmed;
+pub mod confirmed_ws;

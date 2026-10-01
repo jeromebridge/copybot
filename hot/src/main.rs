@@ -1758,6 +1758,22 @@ async fn main() {
         }
     };
     let shadow = root.bot.mode == "shadow";
+    if root.bot.confirmed_ws && root.bot.confirmed_poll_secs.is_none() {
+        eprintln!("CONFIG ERROR: confirmed_ws requires confirmed_poll_secs");
+        std::process::exit(2);
+    }
+    let confirmed_url = if root.bot.confirmed_ws {
+        match std::env::var("CONFIRMED_WSS_URL") {
+            Ok(url) if url.starts_with("wss://") => Some(url),
+            _ => { eprintln!("CONFIG ERROR: confirmed_ws requires CONFIRMED_WSS_URL (wss://)"); std::process::exit(2); }
+        }
+    } else { None };
+    if let Some(secs) = root.bot.confirmed_poll_secs {
+        if let Err(e) = copybot_hot::confirmed::validate(&root.bot.mode, secs, !root.feed.is_empty(), root.bot.txpool_rpc.is_some()) {
+            eprintln!("CONFIG ERROR: {e}");
+            std::process::exit(2);
+        }
+    }
     let live = root.bot.mode == "live" || shadow;
     let funder = root.bot.funder.clone();
     let signer = root.bot.signer.clone();
@@ -7440,6 +7456,20 @@ user={leader}&limit=500"
         });
     }
     let mut tx_seen = copybot_hot::race::SeenTx::new(8192);
+    if let Some(secs) = root.bot.confirmed_poll_secs {
+        let leaders = router.snapshot().iter().map(|l| (l.cfg.name.clone(), l.cfg.wallet20)).collect();
+        let state = format!("{}.confirmed.json", root.bot.control_path);
+        let poller = match copybot_hot::confirmed::Poller::open(leaders, state) {
+            Ok(p) => p,
+            Err(e) => { eprintln!("Confirmed feed unavailable: {e}"); std::process::exit(2); }
+        };
+        let wake = std::sync::Arc::new(tokio::sync::Notify::new());
+        if let Some(url) = confirmed_url {
+            let wallets = router.snapshot().iter().map(|l| l.cfg.wallet20).collect();
+            tokio::spawn(copybot_hot::confirmed_ws::run(url, wallets, wake.clone()));
+        }
+        tokio::spawn(poller.run(tx.clone(), secs, wake));
+    }
     let mut behind = copybot_hot::race::BehindTally::default();
     let mut since_race_report: u64 = 0;
     const FEED_RACE_EVERY: u64 = 250_000;
@@ -7561,7 +7591,10 @@ savings withdrawal — nothing was done automatically. Check the market by hand.
                 }
             }
         }
-        let present = participants(&raw.input);
+        let present = match &raw.confirmed {
+            Some((wallet, _)) => vec![*wallet],
+            None => participants(&raw.input),
+        };
         if present.is_empty() {
             continue;
         }
@@ -7574,7 +7607,11 @@ savings withdrawal — nothing was done automatically. Check the market by hand.
             if !present.iter().any(|p| p == &w20) {
                 continue;
             }
-            for d in decode_all(&raw.input, &w20) {
+            let decoded = match &raw.confirmed {
+                Some((_, d)) => vec![d.clone()],
+                None => decode_all(&raw.input, &w20),
+            };
+            for d in decoded {
                 if lane.cfg.exclude_political
                     && politics
                         .read()

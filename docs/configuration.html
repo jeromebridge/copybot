@@ -41,6 +41,43 @@
 <p>Use either <code>bankroll_usd</code> with derived budget fractions or the parser's absolute-cap mode. Do not mix derived and absolute caps. Set measured <code>leader_max_order_usd</code> and <code>leader_peak_exposure_usd</code> for your selected leader. The engine validates these rather than borrowing another leader's statistics.</p>
 <p><code>compound</code> controls the existing realized-gain/loss sizing behavior. Set it intentionally. A lane budget is a strategy allocation inside a shared account, not security isolation between different owners.</p>
 <h2>Execution</h2>
+<p>For a lower-bandwidth dry observer, set <code>bot.confirmed_poll_secs = 30</code> and
+remove all <code>[[feed]]</code> entries and <code>bot.txpool_rpc</code>. This input is restricted
+to <code>mode = &quot;dry&quot;</code> and polls only enabled leader wallets through Polymarket's
+public activity API; it makes no Alchemy requests. Intervals from 10 to 3600
+seconds are accepted. <code>confirmed_poll</code> log events report rows, new fills and
+invalid records; <code>confirmed_poll_error</code> reports failed polls.</p>
+<p>For wallet-filtered push notifications, also set <code>bot.confirmed_ws = true</code>
+and supply a Polygon <code>wss://</code> endpoint in the <code>CONFIRMED_WSS_URL</code> environment
+variable. Set <code>confirmed_poll_secs = 300</code> for a five-minute safety check.
+This remains dry-only and cannot be combined with pending feeds or txpool.
+Two <code>eth_subscribe logs</code> subscriptions filter V2 exchange <code>OrderFilled</code>
+events by the configured wallets in maker and taker topics at the provider.
+The endpoint is not stored in the TOML configuration or logged.</p>
+<p>Notifications trigger a coalesced activity-API lookup after three seconds;
+they do not decode or execute blockchain logs directly. Detection therefore
+still depends on public API indexing. The periodic check and a checkpoint
+overlap cover delayed indexing; reconnects trigger another catch-up lookup.
+This is not a guarantee against arbitrarily late API records or chain reorgs.
+Wallet changes require a restart. There is no broad-feed fallback.
+<code>confirmed_ws_connected</code>, <code>confirmed_ws_event</code> and
+<code>confirmed_ws_disconnected</code> log connection health and notification sizes.
+Alchemy usage is nonzero: measure a short run before projecting monthly cost.
+The local <code>deploy/start-dry.local.py</code> launcher uses this hybrid mode and reads
+<code>ALCHEMY_WSS_URL</code> from <code>deploy/dry-run.local.env</code> without loading signing keys.</p>
+<p>The first run starts at the current time. A checkpoint beside <code>control_path</code>
+retains progress across restarts, with an overlap of twice the greater of
+120 seconds and the configured polling interval for delayed records.
+Failed or incomplete pagination does not advance progress. Keep that checkpoint
+with the other state files. Delivery is at-most-once across a crash: a crash
+after checkpointing but before processing can lose a dry observation.</p>
+<p>Confirmed fills lack original order IDs, full order size and maker/taker role.
+The observer treats each distinct reported fill as its own sizing input, uses
+fill size as the size bound, and labels the source <code>confirmed-activity</code>.
+Identical rows in one transaction collapse to one observation because the API
+does not expose a unique fill index. Combo trades are excluded. Records arriving
+beyond that overlap may be missed. This is for observing decisions, not
+accurate execution timing, historical replay, or simulated portfolio returns.</p>
 <p>The parser accepts <code>taker</code> or <code>hybrid</code>. Split buy/sell slippage fields take precedence over the legacy combined field. <code>copy_makers</code> and <code>copy_maker_sells</code> are separate choices. Preserve them when transferring a lane between boot configuration and the runtime registry.</p>
 <p>Do not infer units from the historical <code>_c</code> suffix alone: inspect <code>hot/src/config.rs</code> and <code>hot/src/lanes.rs</code> for the value's actual use. This export preserves those calculations.</p>
 <p><code>sell_all_frac = 0.0</code> requests the current any-sell flatten policy. A nonzero threshold changes when an exit becomes a full flatten. <code>sell_floor_frac</code> constrains the exit price relative to the leader; allowing broad slippage can fill at a substantially worse price. Setting it to zero does not guarantee a full fill in an empty market.</p>

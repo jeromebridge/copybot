@@ -6,6 +6,7 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 #[derive(Debug)]
 pub struct RawTx {
+    pub confirmed: Option<([u8; 20], crate::calldata::Decoded)>,
     pub source: String,
     pub hash: String,
     pub input: Vec<u8>,
@@ -379,6 +380,7 @@ async fn pump(
         };
         if out
             .send(RawTx {
+                confirmed: None,
                 source: name.to_string(),
                 hash: hash.to_string(),
                 input: bytes,

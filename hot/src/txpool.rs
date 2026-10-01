@@ -68,6 +68,7 @@ pub async fn run(
                 stats.seen.fetch_add(1, Ordering::Relaxed);
                 if tx
                     .send(RawTx {
+                        confirmed: None,
                         source: "txpool".into(),
                         hash: h.to_string(),
                         input: bytes,
